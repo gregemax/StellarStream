@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  /* Stellar Glass Design System Colors */
+  --stellar-primary: #00F5FF;
+  --stellar-secondary: #8A00FF;
+  --stellar-background: #030303;
+  --stellar-foreground: #ffffff;
+}
+
+@theme inline {
+  --color-primary: var(--stellar-primary);
+  --color-secondary: var(--stellar-secondary);
+  --color-background: var(--stellar-background);
+  --color-foreground: var(--stellar-foreground);
+  --font-sans: var(--font-plus-jakarta);
+}
+
+/* GlassCard Utility Class */
+@utility glass-card {
+  @apply backdrop-blur-md bg-white/5 border border-white/10 rounded-xl;
+}
+
+body {
+  background: var(--stellar-background);
+  color: var(--stellar-foreground);
+  font-family: var(--font-plus-jakarta), sans-serif;
+}
+
+/* Custom scrollbar for Stellar Glass aesthetic */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--stellar-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--stellar-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--stellar-secondary);
+}

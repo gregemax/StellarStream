@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Lato, Poppins } from "next/font/google";
 import "./globals.css";
+import { Nav } from "@/components/nav";
 
 const lato = Lato({
   variable: "--font-lato",
@@ -28,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${lato.variable} ${poppins.variable} antialiased`}>
+        <Nav />
         {children}
       </body>
     </html>

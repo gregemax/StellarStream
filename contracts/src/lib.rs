@@ -12,6 +12,32 @@ pub struct StellarStream;
 
 #[contractimpl]
 impl StellarStream {
+    pub fn initialize(env: Env, admin: Address) {
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::IsPaused, &false);
+    }
+
+    pub fn set_pause(env: Env, admin: Address, paused: bool) {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Admin not set");
+        if admin != stored_admin {
+            panic!("Unauthorized: Only admin can pause");
+        }
+        env.storage().instance().set(&DataKey::IsPaused, &paused);
+    }
+
+    fn check_not_paused(env: &Env) {
+        let is_paused: bool = env.storage().instance().get(&DataKey::IsPaused).unwrap_or(false);
+        if is_paused {
+            panic!("Contract is paused");
+        }
+    }
+
     pub fn create_stream(
         env: Env,
         sender: Address,
@@ -21,10 +47,9 @@ impl StellarStream {
         start_time: u64,
         end_time: u64,
     ) -> u64 {
-        // 1. Auth: Ensure the sender is the one signing this transaction
+        Self::check_not_paused(&env);
         sender.require_auth();
 
-        // 2. Validation: Basic sanity checks
         if end_time <= start_time {
             panic!("End time must be after start time");
         }
@@ -32,12 +57,9 @@ impl StellarStream {
             panic!("Amount must be greater than zero");
         }
 
-        // 3. Asset Transfer: Pull tokens into contract custody
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&sender, &env.current_contract_address(), &amount);
 
-        // 4. Counter Logic: We need a key to track the next ID
-        // Note: You'll need to add 'StreamId' to your DataKey enum (see below)
         let mut stream_id: u64 = env
             .storage()
             .instance()
@@ -70,17 +92,15 @@ impl StellarStream {
     }
 
     pub fn withdraw(env: Env, stream_id: u64, receiver: Address) -> i128 {
-        // 1. Auth: Only the receiver can trigger this withdrawal
+        Self::check_not_paused(&env);
         receiver.require_auth();
 
-        // 2. Fetch the Stream: Retrieve from Persistent storage
         let mut stream: Stream = env
             .storage()
             .persistent()
             .get(&DataKey::Stream(stream_id))
             .unwrap_or_else(|| panic!("Stream does not exist"));
 
-        // 3. Security: Ensure the caller is the actual receiver of this stream
         if receiver != stream.receiver {
             panic!("Unauthorized: You are not the receiver of this stream");
         }
@@ -124,14 +144,13 @@ impl StellarStream {
     }
 
     pub fn cancel_stream(env: Env, stream_id: u64) {
-        // 1. Fetch the Stream first to identify the sender
+        Self::check_not_paused(&env);
         let stream: Stream = env
             .storage()
             .persistent()
             .get(&DataKey::Stream(stream_id))
             .unwrap_or_else(|| panic!("Stream does not exist"));
 
-        // 2. Auth: Only the original sender can cancel the stream
         stream.sender.require_auth();
 
         let now = env.ledger().timestamp();

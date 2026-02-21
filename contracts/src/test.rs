@@ -187,7 +187,7 @@ fn test_pause_blocks_create_stream() {
 
     ctx.token.mint(&sender, &1000);
     ctx.client
-        .create_stream(&sender, &receiver, &ctx.token_id, &1000, &0, &1000);
+        .create_stream(&sender, &receiver, &ctx.token_id, &1000, &0, &100, &1000);
 }
 
 #[test]
@@ -202,7 +202,7 @@ fn test_pause_blocks_withdraw() {
     ctx.token.mint(&sender, &1000);
     let stream_id = ctx
         .client
-        .create_stream(&sender, &receiver, &ctx.token_id, &1000, &0, &1000);
+        .create_stream(&sender, &receiver, &ctx.token_id, &1000, &0, &100, &1000);
 
     ctx.client.set_pause(&admin, &true);
 
@@ -285,7 +285,7 @@ fn test_unpause_allows_operations() {
     ctx.token.mint(&sender, &1000);
     let stream_id = ctx
         .client
-        .create_stream(&sender, &receiver, &ctx.token_id, &1000, &0, &1000);
+        .create_stream(&sender, &receiver, &ctx.token_id, &1000, &0, &100, &1000);
 
     assert_eq!(stream_id, 1);
     let withdrawn = ctx.client.withdraw(&stream_id, &receiver);

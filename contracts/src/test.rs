@@ -140,7 +140,6 @@ fn test_transfer_receiver() {
             .create_stream(&sender, &old_receiver, &ctx.token_id, &1000, &0, &1000);
 
     ctx.client.transfer_receiver(&stream_id, &new_receiver);
-
 }
 
 fn test_batch_stream_creation() {

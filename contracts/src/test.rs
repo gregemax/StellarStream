@@ -128,6 +128,79 @@ fn test_cancellation_split() {
 }
 
 #[test]
+fn test_transfer_receiver() {
+    let ctx = setup_test();
+    let sender = Address::generate(&ctx.env);
+    let old_receiver = Address::generate(&ctx.env);
+    let new_receiver = Address::generate(&ctx.env);
+
+    ctx.token.mint(&sender, &1000);
+    let stream_id = ctx.client.create_stream(
+        &sender,
+        &old_receiver,
+        &ctx.token_id,
+        &1000,
+        &0,
+        &100,
+        &1000,
+    );
+
+    ctx.client.transfer_receiver(&stream_id, &new_receiver);
+
+    ctx.env.ledger().set(soroban_sdk::testutils::LedgerInfo {
+        timestamp: 500,
+        protocol_version: 22,
+        sequence_number: 1,
+        network_id: [0u8; 32],
+        base_reserve: 0,
+        min_temp_entry_ttl: 0,
+        min_persistent_entry_ttl: 0,
+        max_entry_ttl: 1000000,
+    });
+
+    let withdrawn = ctx.client.withdraw(&stream_id, &new_receiver);
+    assert_eq!(withdrawn, 500);
+
+    let token_client = token::Client::new(&ctx.env, &ctx.token_id);
+    assert_eq!(token_client.balance(&new_receiver), 500);
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized: You are not the receiver of this stream")]
+fn test_old_receiver_cannot_withdraw_after_transfer() {
+    let ctx = setup_test();
+    let sender = Address::generate(&ctx.env);
+    let old_receiver = Address::generate(&ctx.env);
+    let new_receiver = Address::generate(&ctx.env);
+
+    ctx.token.mint(&sender, &1000);
+    let stream_id = ctx.client.create_stream(
+        &sender,
+        &old_receiver,
+        &ctx.token_id,
+        &1000,
+        &0,
+        &100,
+        &1000,
+    );
+
+    ctx.client.transfer_receiver(&stream_id, &new_receiver);
+
+    ctx.env.ledger().set(soroban_sdk::testutils::LedgerInfo {
+        timestamp: 500,
+        protocol_version: 22,
+        sequence_number: 1,
+        network_id: [0u8; 32],
+        base_reserve: 0,
+        min_temp_entry_ttl: 0,
+        min_persistent_entry_ttl: 0,
+        max_entry_ttl: 1000000,
+    });
+
+    ctx.client.withdraw(&stream_id, &old_receiver);
+}
+
+#[test]
 fn test_batch_stream_creation() {
     let ctx = setup_test();
     let sender = Address::generate(&ctx.env);

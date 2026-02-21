@@ -263,6 +263,24 @@ impl StellarStream {
             .publish((symbol_short!("cancel"), stream_id), stream.sender);
     }
 
+    pub fn transfer_receiver(env: Env, stream_id: u64, new_receiver: Address) {
+        let mut stream: Stream = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Stream(stream_id))
+            .expect("Stream does not exist");
+
+        stream.receiver.require_auth();
+
+        stream.receiver = new_receiver.clone();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Stream(stream_id), &stream);
+
+        env.events()
+            .publish((symbol_short!("transfer"), stream_id), new_receiver);
+    }
+
     pub fn extend_stream_ttl(env: Env, stream_id: u64) {
         let stream_key = DataKey::Stream(stream_id);
         env.storage()

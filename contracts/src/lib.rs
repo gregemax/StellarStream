@@ -26,13 +26,6 @@ impl StellarStream {
     }
 
     pub fn update_fee(env: Env, admin: Address, fee_bps: u32) {
-    pub fn initialize(env: Env, admin: Address) {
-        admin.require_auth();
-        env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::IsPaused, &false);
-    }
-
-    pub fn set_pause(env: Env, admin: Address, paused: bool) {
         admin.require_auth();
         let stored_admin: Address = env
             .storage()
@@ -48,6 +41,20 @@ impl StellarStream {
         env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
     }
 
+    pub fn initialize(env: Env, admin: Address) {
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::IsPaused, &false);
+    }
+
+    pub fn set_pause(env: Env, admin: Address, paused: bool) {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Admin not set");
+        if admin != stored_admin {
             panic!("Unauthorized: Only admin can pause");
         }
         env.storage().instance().set(&DataKey::IsPaused, &paused);

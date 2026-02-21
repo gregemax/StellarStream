@@ -169,6 +169,9 @@ fn test_batch_stream_creation() {
 
     let token_client = token::Client::new(&ctx.env, &ctx.token_id);
     assert_eq!(token_client.balance(&ctx.contract_id), 3000);
+}
+
+#[test]
 #[should_panic(expected = "Contract is paused")]
 fn test_pause_blocks_create_stream() {
     let ctx = setup_test();

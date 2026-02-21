@@ -105,6 +105,12 @@
                         },
                         {
                           "key": {
+                            "symbol": "metadata"
+                          },
+                          "val": "void"
+                        },
+                        {
+                          "key": {
                             "symbol": "receiver"
                           },
                           "val": {
@@ -166,6 +172,12 @@
                         },
                         {
                           "key": {
+                            "symbol": "metadata"
+                          },
+                          "val": "void"
+                        },
+                        {
+                          "key": {
                             "symbol": "receiver"
                           },
                           "val": {
@@ -224,6 +236,12 @@
                           "val": {
                             "u32": 2
                           }
+                        },
+                        {
+                          "key": {
+                            "symbol": "metadata"
+                          },
+                          "val": "void"
                         },
                         {
                           "key": {
@@ -440,6 +458,12 @@
                     },
                     {
                       "key": {
+                        "symbol": "metadata"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
                         "symbol": "receiver"
                       },
                       "val": {
@@ -581,6 +605,12 @@
                     },
                     {
                       "key": {
+                        "symbol": "metadata"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
                         "symbol": "receiver"
                       },
                       "val": {
@@ -719,6 +749,12 @@
                       "val": {
                         "u32": 2
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "metadata"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {

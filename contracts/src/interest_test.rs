@@ -65,6 +65,7 @@ fn test_create_stream_with_interest_strategy() {
         &200,
         &INTEREST_TO_RECEIVER, // All interest to receiver
         &None,                 // No vault
+        &None,
     );
 
     let stream = client.get_stream(&stream_id);
@@ -88,6 +89,7 @@ fn test_create_stream_with_vault() {
         &200,
         &INTEREST_TO_SENDER,
         &Some(vault.clone()),
+        &None,
     );
 
     let stream = client.get_stream(&stream_id);
@@ -168,6 +170,7 @@ fn test_get_interest_info_no_vault() {
         &200,
         &3,    // 50/50 split
         &None, // No vault
+        &None,
     );
 
     let interest_info = client.get_interest_info(&stream_id);
@@ -192,6 +195,7 @@ fn test_invalid_interest_strategy() {
         &100,
         &200,
         &99, // Invalid strategy (> 7)
+        &None,
         &None,
     );
 }

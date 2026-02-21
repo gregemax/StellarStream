@@ -61,6 +61,7 @@ fn test_full_stream_cycle() {
         &end_time,
         &2,
         &None,
+        &None,
     );
 
     // v22 Change: ledger().with_mut() -> ledger().set()
@@ -100,7 +101,8 @@ fn test_unauthorized_withdrawal() {
         &50,
         &100,
         &2,
-        &None,
+           &None,
+           &None,
     );
 
     ctx.client.withdraw(&stream_id, &thief);
@@ -123,7 +125,8 @@ fn test_cancellation_split() {
         &100,
         &1000,
         &2,
-        &None,
+           &None,
+           &None,
     );
 
     // Jump to 25% (250 seconds in)
@@ -166,6 +169,7 @@ fn test_protocol_fee() {
         &1000,
         &2,
         &None,
+        &None,
     );
 
     assert_eq!(stream_id, 1);
@@ -192,7 +196,8 @@ fn test_transfer_receiver() {
         &100,
         &1000,
         &2,
-        &None,
+           &None,
+           &None,
     );
 
     ctx.client.transfer_receiver(&stream_id, &new_receiver);
@@ -233,7 +238,8 @@ fn test_old_receiver_cannot_withdraw_after_transfer() {
         &100,
         &1000,
         &2,
-        &None,
+           &None,
+           &None,
     );
 
     ctx.client.transfer_receiver(&stream_id, &new_receiver);
@@ -272,6 +278,7 @@ fn test_batch_stream_creation() {
         end_time: 1000,
         interest_strategy: 2,
         vault_address: None,
+        metadata: None,
     });
     requests.push_back(StreamRequest {
         receiver: receiver2.clone(),
@@ -281,6 +288,7 @@ fn test_batch_stream_creation() {
         end_time: 1000,
         interest_strategy: 2,
         vault_address: None,
+        metadata: None,
     });
     requests.push_back(StreamRequest {
         receiver: receiver3.clone(),
@@ -290,6 +298,7 @@ fn test_batch_stream_creation() {
         end_time: 1000,
         interest_strategy: 2,
         vault_address: None,
+        metadata: None,
     });
 
     let stream_ids = ctx
@@ -326,7 +335,8 @@ fn test_pause_blocks_create_stream() {
         &100,
         &1000,
         &2,
-        &None,
+           &None,
+           &None,
     );
 }
 
@@ -349,7 +359,8 @@ fn test_pause_blocks_withdraw() {
         &100,
         &1000,
         &2,
-        &None,
+           &None,
+           &None,
     );
 
     ctx.client.set_pause(&admin, &true);
@@ -405,7 +416,8 @@ fn test_cliff_blocks_withdrawal() {
         &500,
         &1000,
         &2,
-        &None,
+           &None,
+           &None,
     );
 
     ctx.env.ledger().set(soroban_sdk::testutils::LedgerInfo {
@@ -438,7 +450,8 @@ fn test_cliff_unlocks_at_cliff_time() {
         &500,
         &1000,
         &2,
-        &None,
+           &None,
+           &None,
     );
 
     ctx.env.ledger().set(soroban_sdk::testutils::LedgerInfo {
@@ -477,6 +490,7 @@ fn test_unpause_allows_operations() {
         &1000,
         &2,
         &None,
+        &None,
     );
 
     ctx.env.ledger().set(soroban_sdk::testutils::LedgerInfo {
@@ -512,6 +526,7 @@ fn test_invalid_cliff_time() {
         &50,
         &200,
         &2,
-        &None,
+           &None,
+           &None,
     );
 }

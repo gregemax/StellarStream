@@ -85,6 +85,7 @@
                 {
                   "u32": 2
                 },
+                "void",
                 "void"
               ]
             }
@@ -293,6 +294,12 @@
                       "val": {
                         "u32": 2
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "metadata"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {

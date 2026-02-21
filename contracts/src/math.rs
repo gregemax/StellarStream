@@ -76,6 +76,16 @@ pub fn calculate_withdrawable(
     total_unlocked - withdrawn_amount
 }
 
+/// Calculate fee based on basis points (bps)
+/// fee_bps is in hundredths of a percent (100 bps = 1%)
+pub fn calculate_fee(amount: i128, fee_bps: u32) -> i128 {
+    if fee_bps == 0 || amount <= 0 {
+        return 0;
+    }
+    // fee_bps uses 10_000 as denominator (i.e., 10000 bps = 100%)
+    (amount * (fee_bps as i128)) / 10_000
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

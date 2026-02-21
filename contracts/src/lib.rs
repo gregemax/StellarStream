@@ -6,7 +6,7 @@ mod storage;
 mod types;
 
 use errors::Error;
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, Env, Vec};
 use storage::{PROPOSAL_COUNT, RECEIPT, STREAM_COUNT};
 use types::{Milestone, ReceiptMetadata, Stream, StreamProposal, StreamReceipt};
 
@@ -103,6 +103,7 @@ impl StellarStreamContract {
     }
 
     fn execute_proposal(env: Env, proposal: StreamProposal) -> Result<u64, Error> {
+        // Transfer tokens from proposer to contract
         let token_client = token::Client::new(&env, &proposal.token);
         token_client.transfer(
             &proposal.sender,
@@ -110,16 +111,22 @@ impl StellarStreamContract {
             &proposal.total_amount,
         );
 
+        // Allocate next stream id
         let stream_id: u64 = env.storage().instance().get(&STREAM_COUNT).unwrap_or(0);
         let next_id = stream_id + 1;
 
         let stream = Stream {
-            sender: proposal.sender,
+            sender: proposal.sender.clone(),
             receiver: proposal.receiver.clone(),
             token: proposal.token,
             total_amount: proposal.total_amount,
             start_time: proposal.start_time,
             end_time: proposal.end_time,
+            withdrawn_amount: 0,
+            interest_strategy: 0,
+            vault_address: None,
+            deposited_principal: proposal.total_amount,
+            metadata: None,
             withdrawn: 0,
             cancelled: false,
             receipt_owner: proposal.receiver.clone(),
@@ -134,6 +141,11 @@ impl StellarStreamContract {
             .set(&(STREAM_COUNT, stream_id), &stream);
         env.storage().instance().set(&STREAM_COUNT, &next_id);
 
+        // Emit event
+        env.events().publish(
+            (symbol_short!("create"), proposal.sender.clone()),
+            stream_id,
+        );
         Self::mint_receipt(&env, stream_id, &proposal.receiver);
 
         Ok(stream_id)
@@ -187,12 +199,17 @@ impl StellarStreamContract {
         let next_id = stream_id + 1;
 
         let stream = Stream {
-            sender,
+            sender: sender.clone(),
             receiver: receiver.clone(),
             token,
             total_amount,
             start_time,
             end_time,
+            withdrawn_amount: 0,
+            interest_strategy: 0,
+            vault_address: None,
+            deposited_principal: total_amount,
+            metadata: None,
             withdrawn: 0,
             cancelled: false,
             receipt_owner: receiver.clone(),
@@ -207,6 +224,8 @@ impl StellarStreamContract {
             .set(&(STREAM_COUNT, stream_id), &stream);
         env.storage().instance().set(&STREAM_COUNT, &next_id);
 
+        env.events()
+            .publish((symbol_short!("create"), sender.clone()), stream_id);
         Self::mint_receipt(&env, stream_id, &receiver);
 
         Ok(stream_id)
@@ -376,19 +395,23 @@ impl StellarStreamContract {
 
         let current_time = env.ledger().timestamp();
         let unlocked = Self::calculate_unlocked(&stream, current_time);
-        let withdrawable = unlocked - stream.withdrawn;
+        let to_withdraw = unlocked - stream.withdrawn_amount;
 
-        if withdrawable <= 0 {
+        if to_withdraw <= 0 {
             return Err(Error::InsufficientBalance);
         }
 
-        stream.withdrawn += withdrawable;
+        stream.withdrawn_amount = unlocked;
         env.storage().instance().set(&key, &stream);
 
         let token_client = token::Client::new(&env, &stream.token);
-        token_client.transfer(&env.current_contract_address(), &caller, &withdrawable);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &stream.receiver,
+            &to_withdraw,
+        );
 
-        Ok(withdrawable)
+        Ok(to_withdraw)
     }
 
     pub fn cancel(env: Env, stream_id: u64, caller: Address) -> Result<(), Error> {
@@ -690,6 +713,7 @@ mod test {
 
         let stream = client.get_stream(&stream_id);
         assert_eq!(stream.total_amount, 1000);
+        assert_eq!(stream.withdrawn_amount, 0);
         assert!(!stream.cancelled);
         assert_eq!(stream.receipt_owner, receiver);
 

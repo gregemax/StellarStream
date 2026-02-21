@@ -97,6 +97,14 @@
                         },
                         {
                           "key": {
+                            "symbol": "interest_strategy"
+                          },
+                          "val": {
+                            "u32": 2
+                          }
+                        },
+                        {
+                          "key": {
                             "symbol": "receiver"
                           },
                           "val": {
@@ -110,6 +118,12 @@
                           "val": {
                             "u64": 0
                           }
+                        },
+                        {
+                          "key": {
+                            "symbol": "vault_address"
+                          },
+                          "val": "void"
                         }
                       ]
                     },
@@ -144,6 +158,14 @@
                         },
                         {
                           "key": {
+                            "symbol": "interest_strategy"
+                          },
+                          "val": {
+                            "u32": 2
+                          }
+                        },
+                        {
+                          "key": {
                             "symbol": "receiver"
                           },
                           "val": {
@@ -157,6 +179,12 @@
                           "val": {
                             "u64": 0
                           }
+                        },
+                        {
+                          "key": {
+                            "symbol": "vault_address"
+                          },
+                          "val": "void"
                         }
                       ]
                     },
@@ -191,6 +219,14 @@
                         },
                         {
                           "key": {
+                            "symbol": "interest_strategy"
+                          },
+                          "val": {
+                            "u32": 2
+                          }
+                        },
+                        {
+                          "key": {
                             "symbol": "receiver"
                           },
                           "val": {
@@ -204,6 +240,12 @@
                           "val": {
                             "u64": 0
                           }
+                        },
+                        {
+                          "key": {
+                            "symbol": "vault_address"
+                          },
+                          "val": "void"
                         }
                       ]
                     }
@@ -371,10 +413,29 @@
                     },
                     {
                       "key": {
+                        "symbol": "deposited_principal"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 1000
+                        }
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "end_time"
                       },
                       "val": {
                         "u64": 1000
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "interest_strategy"
+                      },
+                      "val": {
+                        "u32": 2
                       }
                     },
                     {
@@ -408,6 +469,12 @@
                       "val": {
                         "address": "CBUSYNQKASUYFWYC3M2GUEDMX4AIVWPALDBYJPNK6554BREHTGZ2IUNF"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "vault_address"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -487,10 +554,29 @@
                     },
                     {
                       "key": {
+                        "symbol": "deposited_principal"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 1500
+                        }
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "end_time"
                       },
                       "val": {
                         "u64": 1000
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "interest_strategy"
+                      },
+                      "val": {
+                        "u32": 2
                       }
                     },
                     {
@@ -524,6 +610,12 @@
                       "val": {
                         "address": "CBUSYNQKASUYFWYC3M2GUEDMX4AIVWPALDBYJPNK6554BREHTGZ2IUNF"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "vault_address"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -603,10 +695,29 @@
                     },
                     {
                       "key": {
+                        "symbol": "deposited_principal"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 500
+                        }
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "end_time"
                       },
                       "val": {
                         "u64": 1000
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "interest_strategy"
+                      },
+                      "val": {
+                        "u32": 2
                       }
                     },
                     {
@@ -640,6 +751,12 @@
                       "val": {
                         "address": "CBUSYNQKASUYFWYC3M2GUEDMX4AIVWPALDBYJPNK6554BREHTGZ2IUNF"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "vault_address"
+                      },
+                      "val": "void"
                     },
                     {
                       "key": {

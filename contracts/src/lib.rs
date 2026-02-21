@@ -1,14 +1,16 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 
+pub mod interest;
 pub mod math;
 mod test;
 mod types;
 
 #[cfg(test)]
-mod bench_test;
+mod interest_test;
 
 use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, Env, Vec};
-pub use types::{DataKey, Stream, StreamRequest};
+pub use types::{DataKey, InterestDistribution, Stream, StreamRequest};
 
 const THRESHOLD: u32 = 518400; // ~30 days
 const LIMIT: u32 = 1036800; // ~60 days
@@ -16,6 +18,7 @@ const LIMIT: u32 = 1036800; // ~60 days
 #[contract]
 pub struct StellarStream;
 
+#[allow(clippy::too_many_arguments)]
 #[contractimpl]
 impl StellarStream {
     pub fn initialize_fee(env: Env, admin: Address, fee_bps: u32, treasury: Address) {
@@ -148,6 +151,8 @@ impl StellarStream {
         start_time: u64,
         cliff_time: u64,
         end_time: u64,
+        interest_strategy: u32,
+        vault_address: Option<Address>,
     ) -> u64 {
         Self::check_not_paused(&env);
         sender.require_auth();
@@ -163,6 +168,11 @@ impl StellarStream {
             panic!("Amount must be greater than zero");
         }
 
+        // Validate interest strategy (must be between 0-7)
+        if interest_strategy > 7 {
+            panic!("Invalid interest strategy");
+        }
+
         let token_client = token::Client::new(&env, &token);
 
         // Get fee configuration once
@@ -172,8 +182,14 @@ impl StellarStream {
         let fee_amount = math::calculate_fee(amount, fee_bps);
         let principal = amount - fee_amount;
 
-        // Transfer principal to contract
-        token_client.transfer(&sender, &env.current_contract_address(), &principal);
+        // Transfer principal to contract or vault
+        let deposit_target = if let Some(ref vault) = vault_address {
+            vault.clone()
+        } else {
+            env.current_contract_address()
+        };
+
+        token_client.transfer(&sender, &deposit_target, &principal);
 
         // Transfer fee if applicable (avoid unnecessary storage read)
         if fee_amount > 0 {
@@ -205,6 +221,9 @@ impl StellarStream {
             cliff_time,
             end_time,
             withdrawn_amount: 0,
+            interest_strategy,
+            vault_address,
+            deposited_principal: principal,
         };
 
         // Store stream
@@ -238,6 +257,9 @@ impl StellarStream {
             if request.amount <= 0 {
                 panic!("Amount must be greater than zero");
             }
+            if request.interest_strategy > 7 {
+                panic!("Invalid interest strategy");
+            }
             total_amount += request.amount;
         }
 
@@ -263,6 +285,9 @@ impl StellarStream {
                 cliff_time: request.cliff_time,
                 end_time: request.end_time,
                 withdrawn_amount: 0,
+                interest_strategy: request.interest_strategy,
+                vault_address: request.vault_address.clone(),
+                deposited_principal: request.amount,
             };
 
             env.storage()
@@ -280,10 +305,140 @@ impl StellarStream {
         stream_ids
     }
 
-    /// Optimized cancel_stream with better flow
+    pub fn withdraw(env: Env, stream_id: u64, receiver: Address) -> i128 {
+        Self::check_not_paused(&env);
+        receiver.require_auth();
+
+        // Re-entrancy guard
+        if Self::is_locked(&env) {
+            panic!("Re-entrancy detected");
+        }
+        Self::set_lock(&env, true);
+
+        let result = Self::withdraw_internal(&env, stream_id, &receiver);
+
+        Self::set_lock(&env, false);
+        result
+    }
+
+    fn withdraw_internal(env: &Env, stream_id: u64, receiver: &Address) -> i128 {
+        let stream_key = DataKey::Stream(stream_id);
+        let mut stream: Stream = env
+            .storage()
+            .persistent()
+            .get(&stream_key)
+            .expect("Stream does not exist");
+
+        if *receiver != stream.receiver {
+            panic!("Unauthorized: You are not the receiver of this stream");
+        }
+
+        let now = env.ledger().timestamp();
+        let total_unlocked = math::calculate_unlocked(
+            stream.amount,
+            stream.start_time,
+            stream.cliff_time,
+            stream.end_time,
+            now,
+        );
+
+        let withdrawable_principal = total_unlocked - stream.withdrawn_amount;
+
+        if withdrawable_principal <= 0 {
+            panic!("No funds available to withdraw at this time");
+        }
+
+        let token_client = token::Client::new(env, &stream.token);
+        let contract_address = env.current_contract_address();
+
+        // Calculate and distribute interest if vault is used
+        let mut total_withdrawn = withdrawable_principal;
+
+        if let Some(ref vault_addr) = stream.vault_address {
+            // Get current vault balance
+            let vault_balance = token_client.balance(vault_addr);
+
+            // Calculate interest earned
+            let total_interest =
+                interest::calculate_vault_interest(vault_balance, stream.deposited_principal);
+
+            if total_interest > 0 {
+                // Calculate proportional interest for this withdrawal
+                let proportional_interest = if stream.amount > 0 {
+                    (total_interest * withdrawable_principal) / stream.amount
+                } else {
+                    0
+                };
+
+                // Distribute interest according to strategy
+                let distribution = interest::calculate_interest_distribution(
+                    proportional_interest,
+                    stream.interest_strategy,
+                );
+
+                // Save receiver's interest share before moving distribution
+                let receiver_interest = distribution.to_receiver;
+
+                // Transfer interest to respective parties
+                if distribution.to_sender > 0 {
+                    token_client.transfer(vault_addr, &stream.sender, &distribution.to_sender);
+                }
+                if distribution.to_receiver > 0 {
+                    token_client.transfer(vault_addr, receiver, &distribution.to_receiver);
+                }
+                if distribution.to_protocol > 0 {
+                    let treasury: Address = env
+                        .storage()
+                        .instance()
+                        .get(&DataKey::Treasury)
+                        .expect("Treasury not set");
+                    token_client.transfer(vault_addr, &treasury, &distribution.to_protocol);
+                }
+
+                // Emit interest distribution event
+                env.events()
+                    .publish((symbol_short!("interest"), stream_id), distribution);
+
+                // Add receiver's interest share to total withdrawn
+                total_withdrawn += receiver_interest;
+            }
+
+            // Transfer principal from vault to receiver
+            token_client.transfer(vault_addr, receiver, &withdrawable_principal);
+        } else {
+            // No vault, simple transfer from contract
+            token_client.transfer(&contract_address, receiver, &withdrawable_principal);
+        }
+
+        stream.withdrawn_amount += withdrawable_principal;
+        env.storage().persistent().set(&stream_key, &stream);
+        env.storage()
+            .persistent()
+            .extend_ttl(&stream_key, THRESHOLD, LIMIT);
+
+        env.events().publish(
+            (symbol_short!("withdraw"), receiver.clone()),
+            (stream_id, total_withdrawn),
+        );
+
+        total_withdrawn
+    }
+
     pub fn cancel_stream(env: Env, stream_id: u64) {
         Self::check_not_paused(&env);
 
+        // Re-entrancy guard
+        if Self::is_locked(&env) {
+            panic!("Re-entrancy detected");
+        }
+        Self::set_lock(&env, true);
+
+        Self::cancel_stream_internal(&env, stream_id);
+
+        Self::set_lock(&env, false);
+    }
+
+    fn cancel_stream_internal(env: &Env, stream_id: u64) {
         let stream_key = DataKey::Stream(stream_id);
         let stream: Stream = env
             .storage()
@@ -313,20 +468,52 @@ impl StellarStream {
         let withdrawable_to_receiver = total_unlocked - stream.withdrawn_amount;
         let refund_to_sender = stream.amount - total_unlocked;
 
-        // Perform transfers only if amounts > 0
-        let token_client = token::Client::new(&env, &stream.token);
-        let contract_address = env.current_contract_address();
+        let token_client = token::Client::new(env, &stream.token);
+
+        // Determine source address (vault or contract)
+        let source_address = if let Some(ref vault_addr) = stream.vault_address {
+            // Handle interest distribution on cancellation
+            let vault_balance = token_client.balance(vault_addr);
+            let total_interest =
+                interest::calculate_vault_interest(vault_balance, stream.deposited_principal);
+
+            if total_interest > 0 {
+                let distribution = interest::calculate_interest_distribution(
+                    total_interest,
+                    stream.interest_strategy,
+                );
+
+                // Distribute all accumulated interest
+                if distribution.to_sender > 0 {
+                    token_client.transfer(vault_addr, &stream.sender, &distribution.to_sender);
+                }
+                if distribution.to_receiver > 0 {
+                    token_client.transfer(vault_addr, &stream.receiver, &distribution.to_receiver);
+                }
+                if distribution.to_protocol > 0 {
+                    let treasury: Address = env
+                        .storage()
+                        .instance()
+                        .get(&DataKey::Treasury)
+                        .expect("Treasury not set");
+                    token_client.transfer(vault_addr, &treasury, &distribution.to_protocol);
+                }
+
+                env.events()
+                    .publish((symbol_short!("interest"), stream_id), distribution);
+            }
+
+            vault_addr.clone()
+        } else {
+            env.current_contract_address()
+        };
 
         if withdrawable_to_receiver > 0 {
-            token_client.transfer(
-                &contract_address,
-                &stream.receiver,
-                &withdrawable_to_receiver,
-            );
+            token_client.transfer(&source_address, &stream.receiver, &withdrawable_to_receiver);
         }
 
         if refund_to_sender > 0 {
-            token_client.transfer(&contract_address, &stream.sender, &refund_to_sender);
+            token_client.transfer(&source_address, &stream.sender, &refund_to_sender);
         }
 
         // Remove stream from storage
@@ -360,5 +547,58 @@ impl StellarStream {
         env.storage()
             .persistent()
             .extend_ttl(&stream_key, THRESHOLD, LIMIT);
+    }
+
+    /// Get current interest information for a stream
+    pub fn get_interest_info(env: Env, stream_id: u64) -> InterestDistribution {
+        let stream: Stream = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Stream(stream_id))
+            .expect("Stream does not exist");
+
+        if let Some(ref vault_addr) = stream.vault_address {
+            let token_client = token::Client::new(&env, &stream.token);
+            let vault_balance = token_client.balance(vault_addr);
+
+            let total_interest =
+                interest::calculate_vault_interest(vault_balance, stream.deposited_principal);
+
+            interest::calculate_interest_distribution(total_interest, stream.interest_strategy)
+        } else {
+            InterestDistribution {
+                to_sender: 0,
+                to_receiver: 0,
+                to_protocol: 0,
+                total_interest: 0,
+            }
+        }
+    }
+
+    /// Get stream details
+    pub fn get_stream(env: Env, stream_id: u64) -> Stream {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Stream(stream_id))
+            .expect("Stream does not exist")
+    }
+
+    // ========== Re-entrancy Guard Functions ==========
+
+    fn is_locked(env: &Env) -> bool {
+        env.storage()
+            .temporary()
+            .get(&DataKey::ReentrancyLock)
+            .unwrap_or(false)
+    }
+
+    fn set_lock(env: &Env, locked: bool) {
+        if locked {
+            env.storage()
+                .temporary()
+                .set(&DataKey::ReentrancyLock, &locked);
+        } else {
+            env.storage().temporary().remove(&DataKey::ReentrancyLock);
+        }
     }
 }

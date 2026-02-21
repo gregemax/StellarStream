@@ -2,8 +2,11 @@ use soroban_sdk::{contracttype, Address, BytesN, Vec};
 
 // Interest distribution strategies
 // Bits can be combined: e.g., 0b011 = 50% sender, 50% receiver
+#[allow(dead_code)]
 pub const INTEREST_TO_SENDER: u32 = 0b001; // 1: All interest to sender
+#[allow(dead_code)]
 pub const INTEREST_TO_RECEIVER: u32 = 0b010; // 2: All interest to receiver
+#[allow(dead_code)]
 pub const INTEREST_TO_PROTOCOL: u32 = 0b100; // 4: All interest to protocol
 
 // Common strategy combinations (exported for convenience)
@@ -101,6 +104,90 @@ pub struct StreamReceipt {
     pub stream_id: u64,
     pub owner: Address,
     pub minted_at: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct StreamCreatedEvent {
+    pub stream_id: u64,
+    pub sender: Address,
+    pub receiver: Address,
+    pub token: Address,
+    pub total_amount: i128,
+    pub start_time: u64,
+    pub end_time: u64,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct StreamClaimEvent {
+    pub stream_id: u64,
+    pub claimer: Address,
+    pub amount: i128,
+    pub total_claimed: i128,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct StreamCancelledEvent {
+    pub stream_id: u64,
+    pub canceller: Address,
+    pub to_receiver: i128,
+    pub to_sender: i128,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ReceiptTransferredEvent {
+    pub stream_id: u64,
+    pub from: Address,
+    pub to: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct StreamPausedEvent {
+    pub stream_id: u64,
+    pub pauser: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct StreamUnpausedEvent {
+    pub stream_id: u64,
+    pub unpauser: Address,
+    pub paused_duration: u64,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ProposalApprovedEvent {
+    pub proposal_id: u64,
+    pub approver: Address,
+    pub approval_count: u32,
+    pub required_approvals: u32,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ProposalCreatedEvent {
+    pub proposal_id: u64,
+    pub sender: Address,
+    pub receiver: Address,
+    pub token: Address,
+    pub total_amount: i128,
+    pub start_time: u64,
+    pub end_time: u64,
+    pub required_approvals: u32,
+    pub deadline: u64,
+    pub timestamp: u64,
 }
 
 #[contracttype]

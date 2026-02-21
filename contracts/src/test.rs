@@ -126,6 +126,7 @@ fn test_cancellation_split() {
 }
 
 #[test]
+#[should_panic(expected = "Contract is paused")]
 fn test_pause_blocks_create_stream() {
     let ctx = setup_test();
     let admin = Address::generate(&ctx.env);
@@ -136,15 +137,12 @@ fn test_pause_blocks_create_stream() {
     ctx.client.set_pause(&admin, &true);
 
     ctx.token.mint(&sender, &1000);
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        ctx.client
-            .create_stream(&sender, &receiver, &ctx.token_id, &1000, &0, &1000);
-    }));
-
-    assert!(result.is_err());
+    ctx.client
+        .create_stream(&sender, &receiver, &ctx.token_id, &1000, &0, &1000);
 }
 
 #[test]
+#[should_panic(expected = "Contract is paused")]
 fn test_pause_blocks_withdraw() {
     let ctx = setup_test();
     let admin = Address::generate(&ctx.env);
@@ -170,11 +168,7 @@ fn test_pause_blocks_withdraw() {
         max_entry_ttl: 1000000,
     });
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        ctx.client.withdraw(&stream_id, &receiver);
-    }));
-
-    assert!(result.is_err());
+    ctx.client.withdraw(&stream_id, &receiver);
 }
 
 #[test]

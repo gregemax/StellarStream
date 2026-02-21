@@ -11,6 +11,7 @@ pub struct Stream {
     pub end_time: u64,
     pub withdrawn: i128,
     pub cancelled: bool,
+    pub receipt_owner: Address,
 }
 
 #[contracttype]
@@ -26,4 +27,22 @@ pub struct StreamProposal {
     pub required_approvals: u32,
     pub deadline: u64,
     pub executed: bool,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct StreamReceipt {
+    pub stream_id: u64,
+    pub owner: Address,
+    pub minted_at: u64,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct ReceiptMetadata {
+    pub stream_id: u64,
+    pub locked_balance: i128,
+    pub unlocked_balance: i128,
+    pub total_amount: i128,
+    pub token: Address,
 }

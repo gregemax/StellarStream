@@ -7,8 +7,8 @@ mod types;
 
 use errors::Error;
 use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
-use storage::{PROPOSAL_COUNT, STREAM_COUNT};
-use types::{Stream, StreamProposal};
+use storage::{PROPOSAL_COUNT, RECEIPT, STREAM_COUNT};
+use types::{ReceiptMetadata, Stream, StreamProposal, StreamReceipt};
 
 #[contract]
 pub struct StellarStreamContract;
@@ -115,19 +115,22 @@ impl StellarStreamContract {
 
         let stream = Stream {
             sender: proposal.sender,
-            receiver: proposal.receiver,
+            receiver: proposal.receiver.clone(),
             token: proposal.token,
             total_amount: proposal.total_amount,
             start_time: proposal.start_time,
             end_time: proposal.end_time,
             withdrawn: 0,
             cancelled: false,
+            receipt_owner: proposal.receiver.clone(),
         };
 
         env.storage()
             .instance()
             .set(&(STREAM_COUNT, stream_id), &stream);
         env.storage().instance().set(&STREAM_COUNT, &next_id);
+
+        Self::mint_receipt(&env, stream_id, &proposal.receiver);
 
         Ok(stream_id)
     }
@@ -158,13 +161,14 @@ impl StellarStreamContract {
 
         let stream = Stream {
             sender,
-            receiver,
+            receiver: receiver.clone(),
             token,
             total_amount,
             start_time,
             end_time,
             withdrawn: 0,
             cancelled: false,
+            receipt_owner: receiver.clone(),
         };
 
         env.storage()
@@ -172,11 +176,100 @@ impl StellarStreamContract {
             .set(&(STREAM_COUNT, stream_id), &stream);
         env.storage().instance().set(&STREAM_COUNT, &next_id);
 
+        Self::mint_receipt(&env, stream_id, &receiver);
+
         Ok(stream_id)
     }
 
-    pub fn withdraw(env: Env, stream_id: u64, receiver: Address) -> Result<i128, Error> {
-        receiver.require_auth();
+    fn mint_receipt(env: &Env, stream_id: u64, owner: &Address) {
+        let receipt = StreamReceipt {
+            stream_id,
+            owner: owner.clone(),
+            minted_at: env.ledger().timestamp(),
+        };
+        env.storage()
+            .instance()
+            .set(&(RECEIPT, stream_id), &receipt);
+    }
+
+    pub fn transfer_receipt(
+        env: Env,
+        stream_id: u64,
+        from: Address,
+        to: Address,
+    ) -> Result<(), Error> {
+        from.require_auth();
+
+        let receipt_key = (RECEIPT, stream_id);
+        let receipt: StreamReceipt = env
+            .storage()
+            .instance()
+            .get(&receipt_key)
+            .ok_or(Error::StreamNotFound)?;
+
+        if receipt.owner != from {
+            return Err(Error::NotReceiptOwner);
+        }
+
+        let stream_key = (STREAM_COUNT, stream_id);
+        let mut stream: Stream = env
+            .storage()
+            .instance()
+            .get(&stream_key)
+            .ok_or(Error::StreamNotFound)?;
+
+        stream.receipt_owner = to.clone();
+        env.storage().instance().set(&stream_key, &stream);
+
+        let new_receipt = StreamReceipt {
+            stream_id,
+            owner: to,
+            minted_at: receipt.minted_at,
+        };
+        env.storage().instance().set(&receipt_key, &new_receipt);
+
+        Ok(())
+    }
+
+    pub fn get_receipt(env: Env, stream_id: u64) -> Result<StreamReceipt, Error> {
+        env.storage()
+            .instance()
+            .get(&(RECEIPT, stream_id))
+            .ok_or(Error::StreamNotFound)
+    }
+
+    pub fn get_receipt_metadata(env: Env, stream_id: u64) -> Result<ReceiptMetadata, Error> {
+        let stream: Stream = env
+            .storage()
+            .instance()
+            .get(&(STREAM_COUNT, stream_id))
+            .ok_or(Error::StreamNotFound)?;
+
+        let current_time = env.ledger().timestamp();
+        let unlocked = Self::calculate_unlocked(&stream, current_time);
+        let locked = stream.total_amount - unlocked;
+
+        Ok(ReceiptMetadata {
+            stream_id,
+            locked_balance: locked,
+            unlocked_balance: unlocked - stream.withdrawn,
+            total_amount: stream.total_amount,
+            token: stream.token,
+        })
+    }
+
+    pub fn withdraw(env: Env, stream_id: u64, caller: Address) -> Result<i128, Error> {
+        caller.require_auth();
+
+        let receipt: StreamReceipt = env
+            .storage()
+            .instance()
+            .get(&(RECEIPT, stream_id))
+            .ok_or(Error::StreamNotFound)?;
+
+        if receipt.owner != caller {
+            return Err(Error::NotReceiptOwner);
+        }
 
         let key = (STREAM_COUNT, stream_id);
         let mut stream: Stream = env
@@ -185,9 +278,6 @@ impl StellarStreamContract {
             .get(&key)
             .ok_or(Error::StreamNotFound)?;
 
-        if stream.receiver != receiver {
-            return Err(Error::Unauthorized);
-        }
         if stream.cancelled {
             return Err(Error::AlreadyCancelled);
         }
@@ -204,7 +294,7 @@ impl StellarStreamContract {
         env.storage().instance().set(&key, &stream);
 
         let token_client = token::Client::new(&env, &stream.token);
-        token_client.transfer(&env.current_contract_address(), &receiver, &withdrawable);
+        token_client.transfer(&env.current_contract_address(), &caller, &withdrawable);
 
         Ok(withdrawable)
     }
@@ -219,7 +309,13 @@ impl StellarStreamContract {
             .get(&key)
             .ok_or(Error::StreamNotFound)?;
 
-        if stream.sender != caller && stream.receiver != caller {
+        let receipt: StreamReceipt = env
+            .storage()
+            .instance()
+            .get(&(RECEIPT, stream_id))
+            .ok_or(Error::StreamNotFound)?;
+
+        if stream.sender != caller && receipt.owner != caller {
             return Err(Error::Unauthorized);
         }
         if stream.cancelled {
@@ -239,7 +335,7 @@ impl StellarStreamContract {
         if to_receiver > 0 {
             token_client.transfer(
                 &env.current_contract_address(),
-                &stream.receiver,
+                &receipt.owner,
                 &to_receiver,
             );
         }
@@ -469,6 +565,95 @@ mod test {
         let stream = client.get_stream(&stream_id);
         assert_eq!(stream.total_amount, 1000);
         assert!(!stream.cancelled);
+        assert_eq!(stream.receipt_owner, receiver);
+
+        let receipt = client.get_receipt(&stream_id);
+        assert_eq!(receipt.stream_id, stream_id);
+        assert_eq!(receipt.owner, receiver);
+    }
+
+    #[test]
+    fn test_receipt_transfer() {
+        let env = Env::default();
+        env.mock_all_auths_allowing_non_root_auth();
+
+        let contract_id = env.register(StellarStreamContract, ());
+        let client = StellarStreamContractClient::new(&env, &contract_id);
+
+        let sender = Address::generate(&env);
+        let receiver = Address::generate(&env);
+        let new_owner = Address::generate(&env);
+        let admin = Address::generate(&env);
+        let (token_id, _) = create_token_contract(&env, &admin);
+
+        let token_admin_client = StellarAssetClient::new(&env, &token_id);
+        token_admin_client.mint(&sender, &10000);
+
+        let stream_id = client.create_stream(&sender, &receiver, &token_id, &1000, &100, &200);
+
+        client.transfer_receipt(&stream_id, &receiver, &new_owner);
+
+        let receipt = client.get_receipt(&stream_id);
+        assert_eq!(receipt.owner, new_owner);
+
+        let stream = client.get_stream(&stream_id);
+        assert_eq!(stream.receipt_owner, new_owner);
+    }
+
+    #[test]
+    fn test_withdraw_with_receipt_owner() {
+        let env = Env::default();
+        env.mock_all_auths_allowing_non_root_auth();
+        env.ledger().with_mut(|li| li.timestamp = 150);
+
+        let contract_id = env.register(StellarStreamContract, ());
+        let client = StellarStreamContractClient::new(&env, &contract_id);
+
+        let sender = Address::generate(&env);
+        let receiver = Address::generate(&env);
+        let new_owner = Address::generate(&env);
+        let admin = Address::generate(&env);
+        let (token_id, _) = create_token_contract(&env, &admin);
+
+        let token_admin_client = StellarAssetClient::new(&env, &token_id);
+        token_admin_client.mint(&sender, &10000);
+
+        let stream_id = client.create_stream(&sender, &receiver, &token_id, &1000, &100, &200);
+
+        client.transfer_receipt(&stream_id, &receiver, &new_owner);
+
+        let result = client.try_withdraw(&stream_id, &receiver);
+        assert_eq!(result, Err(Ok(Error::NotReceiptOwner)));
+
+        let withdrawn = client.withdraw(&stream_id, &new_owner);
+        assert!(withdrawn > 0);
+    }
+
+    #[test]
+    fn test_receipt_metadata() {
+        let env = Env::default();
+        env.mock_all_auths_allowing_non_root_auth();
+        env.ledger().with_mut(|li| li.timestamp = 150);
+
+        let contract_id = env.register(StellarStreamContract, ());
+        let client = StellarStreamContractClient::new(&env, &contract_id);
+
+        let sender = Address::generate(&env);
+        let receiver = Address::generate(&env);
+        let admin = Address::generate(&env);
+        let (token_id, _) = create_token_contract(&env, &admin);
+
+        let token_admin_client = StellarAssetClient::new(&env, &token_id);
+        token_admin_client.mint(&sender, &10000);
+
+        let stream_id = client.create_stream(&sender, &receiver, &token_id, &1000, &100, &200);
+
+        let metadata = client.get_receipt_metadata(&stream_id);
+        assert_eq!(metadata.stream_id, stream_id);
+        assert_eq!(metadata.total_amount, 1000);
+        assert_eq!(metadata.token, token_id);
+        assert!(metadata.unlocked_balance > 0);
+        assert!(metadata.locked_balance < 1000);
     }
 
     #[test]
